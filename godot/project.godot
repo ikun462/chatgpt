@@ -1,0 +1,30 @@
+; Solar Sandbox — Stage 1. Godot 4.4.1 standard, single precision renderer.
+config_version=5
+
+[application]
+config/name="Solar Sandbox · 太阳系物理沙盒"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+config/description="第一阶段：真实地月引力实验室"
+
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1440
+window/size/window_height_override=810
+window/stretch/mode="canvas_items"
+window/size/min_width=1100
+window/size/min_height=680
+
+[rendering]
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/default_filters/anisotropic_filtering_level=3
+anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/screen_space_aa=1
+viewport/hdr_2d=false
+
+[physics]
+common/physics_ticks_per_second=60
+common/max_physics_steps_per_frame=4

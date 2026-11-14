@@ -1,0 +1,26 @@
+UpdateCTestConfiguration  from :/workspace/work/build-linux/DartConfiguration.tcl
+Parse Config file:/workspace/work/build-linux/DartConfiguration.tcl
+Test project /workspace/work/build-linux
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 1
+    Start 1: physics_validation
+
+1: Test command: /workspace/work/build-linux/physics_tests
+1: Working Directory: /workspace/work/build-linux
+1: Test timeout computed to be: 1500
+1: 20 orbits dt=300s: max relative energy=3.58139333173e-08, momentum=5.72036884972e-14, angular momentum=4.96164184739e-14, radius=[363296440.008,405503699.524] m
+1: Kepler reference position errors (m), dt=7200/3600/1800: 99929.4408256, 24984.0899705, 6246.13064244; ratios 3.99972306151, 3.99993074123
+1: 4 massive bodies: conservation passed
+1: Input validation and swept-contact rollback passed
+1: Mass edit trajectory difference after 6000s: 54367.9668722 m
+1: ALL PHYSICS TESTS PASSED
+1/1 Test #1: physics_validation ...............   Passed    0.02 sec
+
+100% tests passed out of 1
+
+Total Test time (real) =   0.02 sec

@@ -1,0 +1,7 @@
+/build*/
+/godot/.godot/
+/godot/bin/*
+!/godot/bin/.gitkeep
+!/godot/bin/*.gdextension
+/dist/
+/third_party/godot-cpp/

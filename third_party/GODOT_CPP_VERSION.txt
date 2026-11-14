@@ -1,0 +1,3 @@
+godot-cpp godot-4.4.1-stable
+commit e4b7c25e721ce3435a029087e3917a30aa73f06b
+https://github.com/godotengine/godot-cpp
