@@ -19,6 +19,8 @@ protected:
 public:
     SolarSimulation();
     void reset();
+    void load_scenario(int scenario,double speed,int fragments);
+    godot::Array get_collision_events() const;
     void advance(double real_seconds, double time_scale, double budget_ms);
     void set_fixed_step(double seconds);
     bool set_mass(int64_t id, double mass);

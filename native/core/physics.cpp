@@ -16,12 +16,14 @@ void System::set_bodies(std::vector<Body> bodies) {
     for(size_t i=0;i<bodies.size();++i) for(size_t j=i+1;j<bodies.size();++j)
         if((bodies[i].position-bodies[j].position).norm()<=bodies[i].radius+bodies[j].radius)
             throw std::invalid_argument("Initial bodies overlap");
+    next_id_=1; for(const auto& b:bodies) next_id_=std::max(next_id_,b.id+1);
+    events_.clear();
     bodies_=std::move(bodies); trial_=bodies_;
     a0_.resize(bodies_.size()); a1_.resize(bodies_.size()); time_=0;
 }
 void System::set_mass(uint64_t id, double mass) {
     if(!std::isfinite(mass)||mass<=0) throw std::invalid_argument("Mass must be positive and finite");
-    for(size_t i=0;i<bodies_.size();++i) if(bodies_[i].id==id) { bodies_[i].mass=mass; trial_[i].mass=mass; return; }
+    for(size_t i=0;i<bodies_.size();++i) if(bodies_[i].id==id) { bodies_[i].mass=mass;  return; }
     throw std::invalid_argument("Unknown body ID");
 }
 void System::reset_earth_moon() {
@@ -36,7 +38,7 @@ void System::reset_earth_moon() {
     });
 }
 void System::accelerations(const std::vector<Body>& s, std::vector<Vec3>& out) const {
-    std::fill(out.begin(),out.end(),Vec3{});
+    out.assign(s.size(),Vec3{});
     for(size_t i=0;i<s.size();++i) for(size_t j=i+1;j<s.size();++j) {
         const Vec3 r=s[j].position-s[i].position;
         const double r2=r.dot(r), inv_r3=1.0/(r2*std::sqrt(r2));
@@ -46,20 +48,47 @@ void System::accelerations(const std::vector<Body>& s, std::vector<Vec3>& out) c
     }
 }
 bool System::step(double dt) {
+    if(!response_) return step_impl(dt);
+    // Keep event response transactional if integration fails.
+    System backup=*this;
+    try { return step_impl(dt); }
+    catch(...) { *this=std::move(backup); throw; }
+}
+bool System::step_impl(double dt) {
     if(!std::isfinite(dt)||dt<=0) throw std::invalid_argument("dt must be positive and finite");
+    trial_=bodies_;
     accelerations(bodies_,a0_);
     for(size_t i=0;i<bodies_.size();++i) {
         trial_[i].position=bodies_[i].position+bodies_[i].velocity*dt+a0_[i]*(0.5*dt*dt);
         trial_[i].velocity=bodies_[i].velocity+a0_[i]*(0.5*dt);
     }
-    // Swept line-segment test over the Verlet drift; prevents endpoint tunnelling.
-    // Stage 1 stops before contact. Impact response belongs to stage 3.
+    double earliest=2;
+    size_t first=0,second=0;
     for(size_t i=0;i<bodies_.size();++i) for(size_t j=i+1;j<bodies_.size();++j) {
         const Vec3 start=bodies_[j].position-bodies_[i].position;
-        const Vec3 end=trial_[j].position-trial_[i].position, delta=end-start;
-        const double d2=delta.dot(delta);
-        const double t=d2>0?std::clamp(-start.dot(delta)/d2,0.0,1.0):0.0;
-        if((start+delta*t).norm()<=bodies_[i].radius+bodies_[j].radius) return false;
+        const Vec3 delta=trial_[j].position-trial_[i].position-start;
+        const double radius=bodies_[i].radius+bodies_[j].radius;
+        const double a=delta.dot(delta), b=start.dot(delta), c=start.dot(start)-radius*radius;
+        double fraction=2;
+        if(c<=0) fraction=0;
+        else if(a>0 && b<0 && b*b-a*c>=0)
+            fraction=c/(-b+std::sqrt(b*b-a*c));
+        if(fraction>=0 && fraction<=1 && fraction<earliest) {
+            earliest=fraction; first=i; second=j;
+        }
+    }
+    if(earliest<=1) {
+        if(!response_) return false;
+        // Contact time is exact along this Verlet drift chord, not the curved orbit.
+        for(size_t i=0;i<bodies_.size();++i) {
+            bodies_[i].position+=(trial_[i].position-bodies_[i].position)*earliest;
+            bodies_[i].velocity+=a0_[i]*(dt*earliest);
+        }
+        time_+=dt*earliest;
+        resolve(first,second);
+        const double remaining=dt*(1-earliest);
+        if(remaining>dt*1e-12) return step_impl(remaining);
+        return true;
     }
     accelerations(trial_,a1_);
     for(size_t i=0;i<bodies_.size();++i) {
@@ -75,7 +104,7 @@ Diagnostics System::diagnostics() const {
     for(const auto& b:bodies_) {
         d.energy+=0.5*b.mass*b.velocity.dot(b.velocity);
         d.momentum+=b.velocity*b.mass;
-        d.angular_momentum+=b.position.cross(b.velocity*b.mass);
+        d.angular_momentum+=b.position.cross(b.velocity*b.mass)+b.spin_angular_momentum;
         d.center_of_mass+=b.position*b.mass; mass+=b.mass;
     }
     for(size_t i=0;i<bodies_.size();++i) for(size_t j=i+1;j<bodies_.size();++j)

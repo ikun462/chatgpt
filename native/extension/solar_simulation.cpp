@@ -5,6 +5,8 @@
 using namespace godot;
 static PackedFloat64Array pack(solar::Vec3 v) {PackedFloat64Array a;a.push_back(v.x);a.push_back(v.y);a.push_back(v.z);return a;}
 void SolarSimulation::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("load_scenario","scenario","speed","fragments"),&SolarSimulation::load_scenario);
+    ClassDB::bind_method(D_METHOD("get_collision_events"),&SolarSimulation::get_collision_events);
     ClassDB::bind_method(D_METHOD("set_mass","id","mass"),&SolarSimulation::set_mass);
     ClassDB::bind_method(D_METHOD("predict_orbits","samples","sample_seconds"),&SolarSimulation::predict_orbits);
     ClassDB::bind_method(D_METHOD("reset"),&SolarSimulation::reset);
@@ -17,7 +19,7 @@ void SolarSimulation::_bind_methods() {
 SolarSimulation::SolarSimulation(){reset();}
 void SolarSimulation::reset(){system.reset_earth_moon();baseline=system.diagnostics();accumulator=0;contact=false;limited=false;error="";last_steps=0;last_ms=0;actual_rate=0;}
 void SolarSimulation::set_fixed_step(double seconds){
-    if(std::isfinite(seconds)&&seconds>=1&&seconds<=600){fixed_step=seconds;accumulator=0;}
+    if(std::isfinite(seconds)&&seconds>=0.01&&seconds<=600){fixed_step=seconds;accumulator=0;}
 }
 void SolarSimulation::advance(double real_seconds,double time_scale,double budget_ms){
     last_steps=0;last_ms=0;actual_rate=0;limited=false;
@@ -44,8 +46,8 @@ Dictionary SolarSimulation::get_diagnostics() const {
     const auto d=system.diagnostics();Dictionary r;
     r["time"]=system.time();r["fixed_step"]=fixed_step;r["physics_ms"]=last_ms;
     r["steps"]=last_steps;r["actual_rate"]=actual_rate;r["limited"]=limited;r["contact"]=contact;r["error"]=error;
-    r["energy_j"]=d.energy;r["relative_energy_error"]=std::abs((d.energy-baseline.energy)/baseline.energy);
-    r["relative_angular_error"]=(d.angular_momentum-baseline.angular_momentum).norm()/baseline.angular_momentum.norm();
+    r["energy_j"]=d.energy;r["relative_energy_error"]=std::abs((d.energy-baseline.energy)/std::max(std::abs(baseline.energy),1.0));
+    r["relative_angular_error"]=(d.angular_momentum-baseline.angular_momentum).norm()/std::max(baseline.angular_momentum.norm(),1.0);
     r["momentum_residual"]=(d.momentum-baseline.momentum).norm();
     r["barycenter_m"]=pack(d.center_of_mass);return r;
 }
@@ -53,7 +55,7 @@ Array SolarSimulation::get_bodies() const {
     Array a;
     for(const auto& b:system.bodies()){
         Dictionary d;d["id"]=int64_t(b.id);d["name"]=String::utf8(b.name.c_str());d["mass"]=b.mass;d["radius"]=b.radius;
-        d["density"]=b.density();d["spin_period"]=b.spin_period;d["position_m"]=pack(b.position);d["velocity_m_s"]=pack(b.velocity);
+        d["fragment"]=b.fragment;d["density"]=b.density();d["spin_period"]=b.spin_period;d["position_m"]=pack(b.position);d["velocity_m_s"]=pack(b.velocity);
         a.push_back(d);
     }return a;
 }
@@ -75,6 +77,7 @@ Array SolarSimulation::predict_orbits(int samples,double sample_seconds) const {
     Array result;
     if(samples<2||samples>1024||!std::isfinite(sample_seconds)||sample_seconds<=0||sample_seconds>7200)return result;
     solar::System prediction=system;
+    prediction.enable_collisions(false);
     std::vector<PackedVector3Array> paths(system.bodies().size());
     // The same Newtonian solver produces this preview. It never drives the live simulation.
     const int substeps=int(std::ceil(sample_seconds/600.0));
@@ -85,4 +88,25 @@ Array SolarSimulation::predict_orbits(int samples,double sample_seconds) const {
         }
     }
     for(auto& path:paths)result.push_back(path);return result;
+}
+
+void SolarSimulation::load_scenario(int scenario,double speed,int fragments) {
+    try {
+        solar::System candidate;
+        candidate.set_fragment_count(fragments);
+        if(scenario==3) candidate.reset_solar_system();
+        else candidate.reset_collision_demo(scenario,speed);
+        system=std::move(candidate);
+        baseline=system.diagnostics(); accumulator=0; contact=false; error="";
+        limited=false;last_steps=0;last_ms=0;actual_rate=0;
+    } catch(const std::exception& e) { error=String::utf8(e.what()); }
+}
+Array SolarSimulation::get_collision_events() const {
+    Array result;
+    for(const auto& e:system.events()) {
+        Dictionary d;d["first"]=int64_t(e.first);d["second"]=int64_t(e.second);
+        d["time"]=e.time;d["speed"]=e.relative_speed;d["energy"]=e.impact_energy;
+        d["fragments"]=int64_t(e.fragments);result.push_back(d);
+    }
+    return result;
 }
