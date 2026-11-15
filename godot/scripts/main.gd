@@ -270,6 +270,7 @@ func _build_ui() -> void:
 	step_menu.item_selected.connect(func(index: int): sim.set_fixed_step([10.0,60.0,300.0][index]))
 	left.add_child(step_menu)
 	left.add_child(_button("重置地月系统", _reset))
+	left.add_child(_button("第二阶段碰撞实验室", func(): get_tree().change_scene_to_file("res://scenes/stage2.tscn")))
 	var right := _panel(root, 1565, 120, 325)
 	right.add_child(_label("天体档案", 24))
 	info_label = _label("", 18)
